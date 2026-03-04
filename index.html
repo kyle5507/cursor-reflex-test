@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Reflex Rush</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── MENU SCREEN ── -->
+  <div id="menu-screen" class="screen active">
+    <div class="menu-content">
+      <div class="logo">
+        <span class="logo-reflex">REFLEX</span>
+        <span class="logo-rush">RUSH</span>
+      </div>
+      <p class="tagline">How fast are your reflexes?</p>
+
+      <div class="mode-grid">
+        <button class="mode-card" data-mode="sprint">
+          <div class="mode-icon">🎯</div>
+          <div class="mode-info">
+            <h3>SPRINT</h3>
+            <p>Click 10 targets as fast as possible</p>
+          </div>
+          <div class="mode-badge">COUNT</div>
+        </button>
+        <button class="mode-card" data-mode="blitz">
+          <div class="mode-icon">⚡</div>
+          <div class="mode-info">
+            <h3>BLITZ</h3>
+            <p>How many can you click in 60 seconds?</p>
+          </div>
+          <div class="mode-badge">TIME</div>
+        </button>
+        <button class="mode-card" data-mode="endurance">
+          <div class="mode-icon">💪</div>
+          <div class="mode-info">
+            <h3>ENDURANCE</h3>
+            <p>Click 25 targets without slowing down</p>
+          </div>
+          <div class="mode-badge">COUNT</div>
+        </button>
+      </div>
+
+      <button id="leaderboard-btn" class="btn-secondary">
+        🏆 Leaderboard
+      </button>
+    </div>
+  </div>
+
+  <!-- ── GAME SCREEN ── -->
+  <div id="game-screen" class="screen">
+    <header class="game-header">
+      <div class="header-left">
+        <button id="quit-btn" class="quit-btn">✕ Quit</button>
+        <span id="mode-label" class="mode-label-header"></span>
+      </div>
+      <div class="game-stats">
+        <div class="stat-block">
+          <span class="stat-label" id="stat-clicks-label">CLICKS</span>
+          <span class="stat-value" id="click-count">0</span>
+        </div>
+        <div class="stat-block highlight">
+          <span class="stat-label" id="stat-time-label">ELAPSED</span>
+          <span class="stat-value mono" id="timer">0.000</span>
+        </div>
+        <div class="stat-block">
+          <span class="stat-label">AVG REACT</span>
+          <span class="stat-value mono" id="avg-reaction">-.---</span>
+        </div>
+      </div>
+    </header>
+
+    <div id="game-area">
+      <div id="start-prompt">
+        <div class="prompt-box">
+          <div class="prompt-icon">🖱️</div>
+          <p class="prompt-title">Click anywhere to begin</p>
+          <p class="prompt-sub" id="prompt-sub-text"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS SCREEN ── -->
+  <div id="results-screen" class="screen">
+    <div class="results-content">
+      <div id="high-score-badge" class="hs-badge" style="display:none">
+        🏆 NEW BEST!
+      </div>
+      <h2 class="results-title">ROUND COMPLETE</h2>
+      <div class="results-mode" id="result-mode"></div>
+
+      <div class="results-main-stat">
+        <div class="main-stat-label" id="result-score-label">Score</div>
+        <div class="main-stat-value" id="result-score"></div>
+      </div>
+
+      <div class="results-grid">
+        <div class="result-item">
+          <span class="result-item-label">Avg Reaction</span>
+          <span class="result-item-value mono" id="result-avg-reaction"></span>
+        </div>
+        <div class="result-item">
+          <span class="result-item-label">Best Reaction</span>
+          <span class="result-item-value mono" id="result-best-reaction"></span>
+        </div>
+        <div class="result-item">
+          <span class="result-item-label">Targets Hit</span>
+          <span class="result-item-value" id="result-clicks"></span>
+        </div>
+        <div class="result-item">
+          <span class="result-item-label">Worst Reaction</span>
+          <span class="result-item-value mono" id="result-worst-reaction"></span>
+        </div>
+      </div>
+
+      <div class="breakdown-section">
+        <h4>Reaction Times</h4>
+        <div id="reaction-breakdown" class="reaction-breakdown"></div>
+      </div>
+
+      <div class="results-buttons">
+        <button id="play-again-btn" class="btn-primary">Play Again</button>
+        <button id="results-lb-btn" class="btn-secondary">Leaderboard</button>
+        <button id="menu-btn" class="btn-ghost">Main Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── LEADERBOARD SCREEN ── -->
+  <div id="leaderboard-screen" class="screen">
+    <div class="lb-content">
+      <button id="back-from-lb-btn" class="back-btn">← Back</button>
+      <h2 class="lb-title">🏆 LEADERBOARD</h2>
+
+      <div class="lb-tabs">
+        <button class="lb-tab active" data-mode="sprint">Sprint</button>
+        <button class="lb-tab" data-mode="blitz">Blitz</button>
+        <button class="lb-tab" data-mode="endurance">Endurance</button>
+      </div>
+
+      <div class="lb-table-wrap">
+        <table class="lb-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Score</th>
+              <th>Avg React</th>
+              <th>Targets</th>
+              <th>Date</th>
+            </tr>
+          </thead>
+          <tbody id="lb-tbody"></tbody>
+        </table>
+        <div id="lb-empty" class="lb-empty" style="display:none">
+          No scores yet — play a game!
+        </div>
+      </div>
+
+      <button id="clear-scores-btn" class="btn-danger">Clear All Scores</button>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
