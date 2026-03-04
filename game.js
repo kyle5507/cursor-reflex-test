@@ -81,67 +81,144 @@ function playLaser() {
   osc2.start(now); osc2.stop(now + 0.1);
 }
 
-// Victory jingle — matches laser theme (square lead + sine bass + chord swell)
+// ── Victory Loop (looping 808 track) ─────────────────────────────────────────
+
+let victoryLoopTimer = null;
+
+function stopVictoryLoop() {
+  if (victoryLoopTimer) { clearTimeout(victoryLoopTimer); victoryLoopTimer = null; }
+}
+
 function playComplete() {
+  stopVictoryLoop();
   if (muted) return;
   const ctx = getAudioCtx();
   if (!ctx) return;
-  const T = ctx.currentTime;
 
-  // Helper: shape a note with attack + decay envelope
-  function note(type, freq, start, dur, vol) {
-    const osc = ctx.createOscillator();
-    const g   = ctx.createGain();
+  const BPM  = 120;
+  const S    = 60 / BPM / 2;   // 8th-note step = 0.25s
+  const LOOP = S * 16;          // 2-bar loop    = 4.0s
+
+  // ── Instruments ──────────────────────────────────────────────────────────
+
+  function kick808(t) {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.connect(g); g.connect(ctx.destination);
-    osc.type = type;
-    osc.frequency.setValueAtTime(freq, T + start);
-    g.gain.setValueAtTime(0.0001, T + start);
-    g.gain.linearRampToValueAtTime(vol,    T + start + 0.012);
-    g.gain.setValueAtTime(vol,             T + start + Math.max(0.013, dur - 0.04));
-    g.gain.exponentialRampToValueAtTime(0.0001, T + start + dur);
-    osc.start(T + start);
-    osc.stop(T  + start + dur + 0.05);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(175, t);
+    osc.frequency.exponentialRampToValueAtTime(32, t + 0.45);
+    g.gain.setValueAtTime(0.65, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+    osc.start(t); osc.stop(t + 0.55);
   }
 
-  // ── Part 1: three ascending laser sweeps (0.00–0.25s) ──────────────────
-  // Same square+sine recipe as the click laser, pitched up each time
-  [
-    { s: 0.00, f1: 650,  f2: 220 },
-    { s: 0.09, f1: 880,  f2: 320 },
-    { s: 0.18, f1: 1200, f2: 480 },
-  ].forEach(({ s, f1, f2 }) => {
-    const osc = ctx.createOscillator();
+  function hihat(t, open = false) {
+    const len  = Math.floor(ctx.sampleRate * (open ? 0.18 : 0.05));
+    const buf  = ctx.createBuffer(1, len, ctx.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+    const src = ctx.createBufferSource(); src.buffer = buf;
+    const hpf = ctx.createBiquadFilter(); hpf.type = 'highpass'; hpf.frequency.value = 6800;
     const g   = ctx.createGain();
+    const vol = open ? 0.09 : 0.06, fade = open ? 0.14 : 0.04;
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade);
+    src.connect(hpf); hpf.connect(g); g.connect(ctx.destination);
+    src.start(t); src.stop(t + fade + 0.01);
+  }
+
+  function clap808(t) {
+    // Three layered noise bursts slightly offset — classic 808 clap snap
+    [0, 0.010, 0.020].forEach(off => {
+      const len  = Math.floor(ctx.sampleRate * 0.11);
+      const buf  = ctx.createBuffer(1, len, ctx.sampleRate);
+      const data = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+      const src = ctx.createBufferSource(); src.buffer = buf;
+      const bpf = ctx.createBiquadFilter(); bpf.type = 'bandpass';
+      bpf.frequency.value = 1050; bpf.Q.value = 0.6;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.28, t + off);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.13);
+      src.connect(bpf); bpf.connect(g); g.connect(ctx.destination);
+      src.start(t + off); src.stop(t + off + 0.15);
+    });
+  }
+
+  function bass808(t, freq, dur) {
+    const osc = ctx.createOscillator(), g = ctx.createGain();
     osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine';
+    // Characteristic 808 pitch slide: starts sharp, settles to pitch
+    osc.frequency.setValueAtTime(freq * 1.6, t);
+    osc.frequency.exponentialRampToValueAtTime(freq, t + 0.055);
+    g.gain.setValueAtTime(0.40, t);
+    g.gain.setValueAtTime(0.34, t + dur - 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
+
+  function lead(t, freq, dur, vol = 0.10) {
+    const osc = ctx.createOscillator();
+    const lpf = ctx.createBiquadFilter();
+    const g   = ctx.createGain();
+    osc.connect(lpf); lpf.connect(g); g.connect(ctx.destination);
     osc.type = 'square';
-    osc.frequency.setValueAtTime(f1, T + s);
-    osc.frequency.exponentialRampToValueAtTime(f2, T + s + 0.07);
-    g.gain.setValueAtTime(0.13, T + s);
-    g.gain.exponentialRampToValueAtTime(0.0001, T + s + 0.08);
-    osc.start(T + s); osc.stop(T + s + 0.09);
-  });
+    lpf.type = 'lowpass'; lpf.frequency.value = 1600; lpf.Q.value = 1.2;
+    osc.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.linearRampToValueAtTime(vol, t + 0.012);
+    g.gain.setValueAtTime(vol, t + Math.max(0.02, dur - 0.04));
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    osc.start(t); osc.stop(t + dur + 0.05);
+  }
 
-  // ── Part 2: square-wave melody (0.30–1.18s) ────────────────────────────
-  // C5  E5  G5  A5  G5  C6  — "da da da DA da DAAAA"
-  [
-    [0.30, 523,  0.10],
-    [0.41, 659,  0.10],
-    [0.52, 784,  0.10],
-    [0.63, 880,  0.08],
-    [0.72, 784,  0.08],
-    [0.82, 1047, 0.38],
-  ].forEach(([s, f, d]) => note('square', f, s, d, 0.14));
+  // ── 2-bar pattern scheduler ───────────────────────────────────────────────
+  function schedule(t0) {
+    // Kicks — syncopated trap-style
+    //   Bar 1: beat 1, beat 2½, beat 3, beat 3½
+    [0, 3, 4, 5].forEach(s => kick808(t0 + s * S));
+    //   Bar 2: beat 1, beat 1½, beat 3, beat 4
+    [8, 9, 12, 14].forEach(s => kick808(t0 + s * S));
 
-  // ── Part 3: sine sub-bass (0.30–1.22s) ────────────────────────────────
-  // C3  F3  G3  — same sine style as the laser's sub oscillator
-  [
-    [0.30, 130.8, 0.22],
-    [0.52, 174.6, 0.20],
-    [0.72, 196.0, 0.50],
-  ].forEach(([s, f, d]) => note('sine', f, s, d, 0.22));
+    // Claps — beats 2 & 4 of each bar
+    [2, 6, 10, 14].forEach(s => clap808(t0 + s * S));
 
-  // ── Part 4: final C-major chord swell (1.08–1.55s) ────────────────────
-  [523, 659, 784].forEach(f => note('sine', f, 1.08, 0.48, 0.07));
+    // Hi-hats — 8th notes; open hat on every off-beat (+)
+    for (let s = 0; s < 16; s++) hihat(t0 + s * S, s % 2 !== 0);
+
+    // 808 Bass line — C3 → F3 → G3 → A2 → G3
+    bass808(t0 +  0 * S, 130.8, S * 4);   // C3  bar1 beats 1-2
+    bass808(t0 +  4 * S, 174.6, S * 2);   // F3  bar1 beat 3
+    bass808(t0 +  6 * S, 196.0, S * 2);   // G3  bar1 beat 4
+    bass808(t0 +  8 * S, 130.8, S * 3);   // C3  bar2 beats 1-2
+    bass808(t0 + 11 * S, 110.0, S * 1);   // A2  bar2 beat 2½ (tension)
+    bass808(t0 + 12 * S, 196.0, S * 4);   // G3  bar2 beats 3-4 (resolve)
+
+    // Lead melody — 2-bar phrase, resolves back to root on loop
+    //   Bar 1: ascending C5→E5→G5→A5→C6
+    lead(t0 +  0 * S, 523,  S * 1.8);     // C5
+    lead(t0 +  2 * S, 659,  S * 1.8);     // E5
+    lead(t0 +  4 * S, 784,  S * 1.2);     // G5
+    lead(t0 +  5 * S, 880,  S * 1.2);     // A5
+    lead(t0 +  6 * S, 1047, S * 2.0);     // C6 (hold)
+    //   Bar 2: descending peak then settle — E6→C6→G5 (leads back to C5)
+    lead(t0 +  8 * S, 1319, S * 1.5);     // E6 (peak)
+    lead(t0 + 10 * S, 1047, S * 1.0);     // C6
+    lead(t0 + 11 * S, 784,  S * 1.0);     // G5
+    lead(t0 + 12 * S, 659,  S * 1.5);     // E5
+    lead(t0 + 14 * S, 523,  S * 2.5);     // C5 (resolve — loops cleanly)
+  }
+
+  // ── Loop scheduler with setTimeout lookahead ──────────────────────────────
+  let nextBar = ctx.currentTime + 0.05;
+
+  function tick() {
+    schedule(nextBar);
+    nextBar += LOOP;
+    victoryLoopTimer = setTimeout(tick, (LOOP - 0.15) * 1000);
+  }
+
+  tick();
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
@@ -174,6 +251,7 @@ const startPrompt = $('start-prompt');
 // ── Screen helpers ────────────────────────────────────────────────────────────
 
 function showScreen(name) {
+  if (name !== 'results') stopVictoryLoop();
   Object.values(screens).forEach(s => s.classList.remove('active'));
   screens[name].classList.add('active');
 }
@@ -188,6 +266,7 @@ $('quit-btn').addEventListener('click', quitToMenu);
 $('mute-btn').addEventListener('click', () => {
   muted = !muted;
   $('mute-btn').textContent = muted ? '🔇' : '🔊';
+  if (muted) stopVictoryLoop();
 });
 $('play-again-btn').addEventListener('click', () => startMode(state.mode));
 $('menu-btn').addEventListener('click', () => showScreen('menu'));
