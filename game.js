@@ -37,6 +37,69 @@ const BOX_PADDING    = 24;
 const STORAGE_KEY    = 'reflexRush_v1_scores';
 const MAX_PER_MODE   = 20;
 
+// ── Audio ────────────────────────────────────────────────────────────────────
+
+let audioCtx = null;
+let muted = false;
+
+function getAudioCtx() {
+  if (!audioCtx) {
+    try { audioCtx = new (window.AudioContext || window['webkitAudioContext'])(); }
+    catch { return null; }
+  }
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+// Laser zap — downward frequency sweep with harmonics
+function playLaser() {
+  if (muted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+
+  // Main sweep: square wave high → low (the "pew")
+  const osc1 = ctx.createOscillator();
+  const g1   = ctx.createGain();
+  osc1.connect(g1); g1.connect(ctx.destination);
+  osc1.type = 'square';
+  osc1.frequency.setValueAtTime(1100, now);
+  osc1.frequency.exponentialRampToValueAtTime(120, now + 0.13);
+  g1.gain.setValueAtTime(0.18, now);
+  g1.gain.exponentialRampToValueAtTime(0.0001, now + 0.14);
+  osc1.start(now); osc1.stop(now + 0.14);
+
+  // Sub sine for punch
+  const osc2 = ctx.createOscillator();
+  const g2   = ctx.createGain();
+  osc2.connect(g2); g2.connect(ctx.destination);
+  osc2.type = 'sine';
+  osc2.frequency.setValueAtTime(520, now);
+  osc2.frequency.exponentialRampToValueAtTime(60, now + 0.09);
+  g2.gain.setValueAtTime(0.22, now);
+  g2.gain.exponentialRampToValueAtTime(0.0001, now + 0.1);
+  osc2.start(now); osc2.stop(now + 0.1);
+}
+
+// Short ascending chime for game complete
+function playComplete() {
+  if (muted) return;
+  const ctx = getAudioCtx();
+  if (!ctx) return;
+  [0, 0.1, 0.22].forEach((offset, i) => {
+    const freq = [523, 659, 784][i]; // C5 E5 G5
+    const now  = ctx.currentTime + offset;
+    const osc  = ctx.createOscillator();
+    const g    = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(freq, now);
+    g.gain.setValueAtTime(0.22, now);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
+    osc.start(now); osc.stop(now + 0.25);
+  });
+}
+
 // ── State ────────────────────────────────────────────────────────────────────
 
 let state = {
@@ -78,6 +141,10 @@ document.querySelectorAll('.mode-card').forEach(card => {
 });
 
 $('quit-btn').addEventListener('click', quitToMenu);
+$('mute-btn').addEventListener('click', () => {
+  muted = !muted;
+  $('mute-btn').textContent = muted ? '🔇' : '🔊';
+});
 $('play-again-btn').addEventListener('click', () => startMode(state.mode));
 $('menu-btn').addEventListener('click', () => showScreen('menu'));
 $('results-lb-btn').addEventListener('click', () => openLeaderboard(state.mode));
@@ -218,6 +285,8 @@ function onTargetClick(e) {
   state.reactionTimes.push(reaction);
   state.clicks++;
 
+  playLaser();
+
   // Show click ripple
   spawnRipple(e.currentTarget);
 
@@ -256,6 +325,8 @@ function endGame() {
   const score   = cfg.timeLimit ? state.clicks : totalS;
   const times   = state.reactionTimes;
   const avgMs   = times.length ? times.reduce((a, b) => a + b, 0) / times.length : 0;
+
+  playComplete();
 
   saveScore({
     mode:        state.mode,
