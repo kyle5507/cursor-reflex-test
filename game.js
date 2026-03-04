@@ -81,23 +81,67 @@ function playLaser() {
   osc2.start(now); osc2.stop(now + 0.1);
 }
 
-// Short ascending chime for game complete
+// Victory jingle — matches laser theme (square lead + sine bass + chord swell)
 function playComplete() {
   if (muted) return;
   const ctx = getAudioCtx();
   if (!ctx) return;
-  [0, 0.1, 0.22].forEach((offset, i) => {
-    const freq = [523, 659, 784][i]; // C5 E5 G5
-    const now  = ctx.currentTime + offset;
-    const osc  = ctx.createOscillator();
-    const g    = ctx.createGain();
+  const T = ctx.currentTime;
+
+  // Helper: shape a note with attack + decay envelope
+  function note(type, freq, start, dur, vol) {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
     osc.connect(g); g.connect(ctx.destination);
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(freq, now);
-    g.gain.setValueAtTime(0.22, now);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.25);
-    osc.start(now); osc.stop(now + 0.25);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, T + start);
+    g.gain.setValueAtTime(0.0001, T + start);
+    g.gain.linearRampToValueAtTime(vol,    T + start + 0.012);
+    g.gain.setValueAtTime(vol,             T + start + Math.max(0.013, dur - 0.04));
+    g.gain.exponentialRampToValueAtTime(0.0001, T + start + dur);
+    osc.start(T + start);
+    osc.stop(T  + start + dur + 0.05);
+  }
+
+  // ── Part 1: three ascending laser sweeps (0.00–0.25s) ──────────────────
+  // Same square+sine recipe as the click laser, pitched up each time
+  [
+    { s: 0.00, f1: 650,  f2: 220 },
+    { s: 0.09, f1: 880,  f2: 320 },
+    { s: 0.18, f1: 1200, f2: 480 },
+  ].forEach(({ s, f1, f2 }) => {
+    const osc = ctx.createOscillator();
+    const g   = ctx.createGain();
+    osc.connect(g); g.connect(ctx.destination);
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(f1, T + s);
+    osc.frequency.exponentialRampToValueAtTime(f2, T + s + 0.07);
+    g.gain.setValueAtTime(0.13, T + s);
+    g.gain.exponentialRampToValueAtTime(0.0001, T + s + 0.08);
+    osc.start(T + s); osc.stop(T + s + 0.09);
   });
+
+  // ── Part 2: square-wave melody (0.30–1.18s) ────────────────────────────
+  // C5  E5  G5  A5  G5  C6  — "da da da DA da DAAAA"
+  [
+    [0.30, 523,  0.10],
+    [0.41, 659,  0.10],
+    [0.52, 784,  0.10],
+    [0.63, 880,  0.08],
+    [0.72, 784,  0.08],
+    [0.82, 1047, 0.38],
+  ].forEach(([s, f, d]) => note('square', f, s, d, 0.14));
+
+  // ── Part 3: sine sub-bass (0.30–1.22s) ────────────────────────────────
+  // C3  F3  G3  — same sine style as the laser's sub oscillator
+  [
+    [0.30, 130.8, 0.22],
+    [0.52, 174.6, 0.20],
+    [0.72, 196.0, 0.50],
+  ].forEach(([s, f, d]) => note('sine', f, s, d, 0.22));
+
+  // ── Part 4: final C-major chord swell (1.08–1.55s) ────────────────────
+  [523, 659, 784].forEach(f => note('sine', f, 1.08, 0.48, 0.07));
 }
 
 // ── State ────────────────────────────────────────────────────────────────────
