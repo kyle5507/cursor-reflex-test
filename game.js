@@ -84,9 +84,21 @@ function playLaser() {
 // ── Victory Loop (looping 808 track) ─────────────────────────────────────────
 
 let victoryLoopTimer = null;
+let victoryBus = null;          // master gain node — set to 0 to silence instantly
 
 function stopVictoryLoop() {
   if (victoryLoopTimer) { clearTimeout(victoryLoopTimer); victoryLoopTimer = null; }
+  if (victoryBus) {
+    const bus = victoryBus;
+    victoryBus = null;
+    // Ramp to silence over 15 ms to avoid a click, then disconnect
+    try {
+      bus.gain.cancelScheduledValues(bus.context.currentTime);
+      bus.gain.setValueAtTime(bus.gain.value, bus.context.currentTime);
+      bus.gain.linearRampToValueAtTime(0, bus.context.currentTime + 0.015);
+      setTimeout(() => { try { bus.disconnect(); } catch (_) {} }, 60);
+    } catch (_) {}
+  }
 }
 
 function playComplete() {
@@ -94,6 +106,11 @@ function playComplete() {
   if (muted) return;
   const ctx = getAudioCtx();
   if (!ctx) return;
+
+  // All loop audio routes through this bus — zeroing it stops everything instantly
+  const bus = ctx.createGain();
+  bus.connect(ctx.destination);
+  victoryBus = bus;
 
   const BPM  = 120;
   const S    = 60 / BPM / 2;   // 8th-note step = 0.25s
@@ -103,7 +120,7 @@ function playComplete() {
 
   function kick808(t) {
     const osc = ctx.createOscillator(), g = ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
+    osc.connect(g); g.connect(bus);
     osc.type = 'sine';
     osc.frequency.setValueAtTime(175, t);
     osc.frequency.exponentialRampToValueAtTime(32, t + 0.45);
@@ -122,7 +139,7 @@ function playComplete() {
     const g   = ctx.createGain();
     const vol = open ? 0.09 : 0.06, fade = open ? 0.14 : 0.04;
     g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.0001, t + fade);
-    src.connect(hpf); hpf.connect(g); g.connect(ctx.destination);
+    src.connect(hpf); hpf.connect(g); g.connect(bus);
     src.start(t); src.stop(t + fade + 0.01);
   }
 
@@ -139,14 +156,14 @@ function playComplete() {
       const g = ctx.createGain();
       g.gain.setValueAtTime(0.28, t + off);
       g.gain.exponentialRampToValueAtTime(0.0001, t + off + 0.13);
-      src.connect(bpf); bpf.connect(g); g.connect(ctx.destination);
+      src.connect(bpf); bpf.connect(g); g.connect(bus);
       src.start(t + off); src.stop(t + off + 0.15);
     });
   }
 
   function bass808(t, freq, dur) {
     const osc = ctx.createOscillator(), g = ctx.createGain();
-    osc.connect(g); g.connect(ctx.destination);
+    osc.connect(g); g.connect(bus);
     osc.type = 'sine';
     // Characteristic 808 pitch slide: starts sharp, settles to pitch
     osc.frequency.setValueAtTime(freq * 1.6, t);
@@ -161,7 +178,7 @@ function playComplete() {
     const osc = ctx.createOscillator();
     const lpf = ctx.createBiquadFilter();
     const g   = ctx.createGain();
-    osc.connect(lpf); lpf.connect(g); g.connect(ctx.destination);
+    osc.connect(lpf); lpf.connect(g); g.connect(bus);
     osc.type = 'square';
     lpf.type = 'lowpass'; lpf.frequency.value = 1600; lpf.Q.value = 1.2;
     osc.frequency.setValueAtTime(freq, t);
